@@ -11,8 +11,6 @@ import getopt
 
 # todo
 # Kommentare in mapping csv file zulassen (start mit (#)
-# sumi, sume evtl raus?
-# correct daily/monthly totals
 
 FieldNamesDaily = ['TimeStamp',              # 0
                    'Bezug',                  # 1
@@ -85,6 +83,13 @@ FieldNamesMonthly = ['TimeStamp',            # 0
                      'SmartHomeDevice10']    # 28
 
 
+def readCsv(csvFile: str, csvs: list):
+    csvf = open(csvFile, encoding='utf-8')
+    csvReader = csv.DictReader(csvf)
+    for csvrow in csvReader:
+        csvs.append(csvrow)
+
+
 def add_one_month(orig_date):
     # advance year and month by one month
     new_year = orig_date.year
@@ -99,40 +104,25 @@ def add_one_month(orig_date):
 
     return orig_date.replace(year=new_year, month=new_month, day=new_day)
 
+
 def entryMap(obj: dict, maps: list, row: dict):
-    sumi = 0
-    sume = 0
     for map in maps:
         if map['devicetype'] not in obj:
             obj[map['devicetype']] = {}
-            sumi = 0
-            sume = 0
         if map['device'] not in obj[map['devicetype']]:
             obj[map['devicetype']][map['device']] = {}
         if map['conversion'] == 'int' and 'sum' not in map['source']:
             try:
                 obj[map['devicetype']][map['device']][map['direction']] = int(float(row[map['source']]))
-                if map['direction'] == 'imported' and map['device'] != 'all':
-                    sumi = sumi + int(float(row[map['source']]))
-                if map['direction'] == 'exported' and map['device'] != 'all':
-                    sume = sume + int(float(row[map['source']]))
             except Exception:
                 obj[map['devicetype']][map['device']][map['direction']] = int(0)
         if map['conversion'] == 'float':
             try:
                 obj[map['devicetype']][map['device']][map['direction']] = float(row[map['source']])
-                if map['direction'] == 'imported' and map['device'] != 'all':
-                    sumi = sumi + float(row[map['source']])
-                if map['direction'] == 'exported' and map['device'] != 'all':
-                    sume = sume + float(row[map['source']])
             except Exception:
                 obj[map['devicetype']][map['device']][map['direction']] = float(0)
         if map['conversion'] == 'const':
             obj[map['devicetype']][map['device']][map['direction']] = int(map['source'])
-        if map['source'] == 'sumi':
-            obj[map['devicetype']][map['device']][map['direction']] = sumi
-        if map['source'] == 'sume':
-            obj[map['devicetype']][map['device']][map['direction']] = sume
 
 
 def totalsMap(Mode: str, obj: dict, maps: list, entries: list, nextEntry: dict):
@@ -147,13 +137,34 @@ def totalsMap(Mode: str, obj: dict, maps: list, entries: list, nextEntry: dict):
                 float(nextEntry[map['devicetype']][map['device']][map['direction']]) -
                 float(entries[0][map['devicetype']][map['device']][map['direction']]))
         if map['conversion'] == 'float' and 'sum' not in map['source']:
-            # if map['devicetype'] == 'pv' and map['direction'] == 'exported':
-                # print("pv-totals:" + str(float(nextEntry[map['devicetype']][map['device']][map['direction']])) + ', ' + str(float(entries[0][map['devicetype']][map['device']][map['direction']])))
             obj[map['devicetype']][map['device']][map['direction']]\
              = float(nextEntry[map['devicetype']][map['device']][map['direction']])\
              - float(entries[0][map['devicetype']][map['device']][map['direction']])
         if map['conversion'] == 'const':
             obj[map['devicetype']][map['device']][map['direction']] = int(map['source'])
+
+
+# read and process 1.9 csv data file into json structure
+def readCsvData(Mode: str, csvFile: str, FieldNames: list, entries: list, dt: str, maps: list):
+    print("reading csv file: " + csvFile)
+    with open(csvFile, 'r', encoding='utf-8') as csvf:
+        csvReader = csv.DictReader(csvf, fieldnames=FieldNames)
+        for rows in csvReader:
+            entry = {}
+            ts = rows['TimeStamp']
+            if Mode == 'D':
+                tsx = dt + ' ' + ts
+                ts_time = time.strptime(tsx, '%Y%m%d %H%M')
+                ts = ts[0:2] + ':' + ts[2:4]
+            elif Mode == 'M':
+                ts_time = time.strptime(ts, '%Y%m%d')
+            ts_epoch = int(time.mktime(ts_time))
+            entry['timestamp'] = ts_epoch
+            entry['date'] = ts
+
+            # print("ts=" + ts + ", epoch=" + ts_epoch + ", t1=" + t1)
+            entryMap(entry, maps, rows)
+            entries.append(entry)
 
 
 # Function to convert a CSV to JSON
@@ -172,41 +183,15 @@ def make_json(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str):
     entries = []
     totals = {}
 
-    mapf = open(mapFile, encoding='utf-8')
-    mapReader = csv.DictReader(mapf)
     maps = []
-    for map in mapReader:
-        maps.append(map)
+    readCsv(mapFile, maps)
 
-    # Open a csv reader called DictReader
-    with open(csvFilePath, encoding='utf-8') as csvf:
-        csvReader = csv.DictReader(csvf, fieldnames=FieldNames)
+    readCsvData(Mode, csvFilePath, FieldNames, entries, dt, maps)
 
-        # Convert each row into a dictionary
-        # and add it to data
-        for rows in csvReader:
-
-            entry = {}
-            ts = rows['TimeStamp']
-            if Mode == 'D':
-                tsx = dt + ' ' + ts
-                ts_time = time.strptime(tsx, '%Y%m%d %H%M')
-                ts = ts[0:2] + ':' + ts[2:4]
-            elif Mode == 'M':
-                ts_time = time.strptime(ts, '%Y%m%d')
-            ts_epoch = int(time.mktime(ts_time))
-            entry['timestamp'] = ts_epoch
-            entry['date'] = ts
-
-            # print("ts=" + ts + ", epoch=" + ts_epoch + ", t1=" + t1)
-            entryMap(entry, maps, rows)
-            # print('entry: ' + json.dumps(entry))
-            entries.append(entry)
-
-    # for now and as fallback use last row in current file
-    # correct would be to use 1st row of next file
-    # next file precedence: json file if exists, otherwise csv file from 1.9
-    # name of next interval - daily or monthly
+    # create totals entry
+    # 1. use csv file as next entry if existent
+    # 2. use csv file as next entry if existent
+    # 3. as fallback use last row in current file
     if Mode == 'D':
         act_day = datetime.datetime.strptime(dt, '%Y%m%d')
         next_day = act_day + datetime.timedelta(days=1)
@@ -216,39 +201,20 @@ def make_json(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str):
         next_month = add_one_month(act_month)
         nextFile = datetime.datetime.strftime(next_month, "%Y%m")
 
-    # search for json file
-    next_jsonFile = os.path.dirname(jsonFilePath) + '/' + nextFile + ".json"
+    # search for csv, then for json file
     next_csvFile = os.path.dirname(csvFilePath) + '/' + nextFile + ".csv"
-    # print("next_jsonFile=" + next_jsonFile + ", next_csvFile=" + next_csvFile)
-    if os.path.exists(next_csvFile):
-        print("reading next csv file=" + next_csvFile)
-        with open(next_csvFile, 'r', encoding='utf-8') as csvf:
-            next_csvReader = csv.DictReader(csvf, fieldnames=FieldNames)
-            next_entries = []
-            for rows in next_csvReader:
-                entry = {}
-                ts = rows['TimeStamp']
-                if Mode == 'D':
-                    tsx = dt + ' ' + ts
-                    ts_time = time.strptime(tsx, '%Y%m%d %H%M')
-                    ts = ts[0:2] + ':' + ts[2:4]
-                elif Mode == 'M':
-                    ts_time = time.strptime(ts, '%Y%m%d')
-                ts_epoch = int(time.mktime(ts_time))
-                entry['timestamp'] = ts_epoch
-                entry['date'] = ts
+    next_jsonFile = os.path.dirname(jsonFilePath) + '/' + nextFile + ".json"
 
-                # print("ts=" + ts + ", epoch=" + ts_epoch + ", t1=" + t1)
-                entryMap(entry, maps, rows)
-                next_entries.append(entry)
-            nextEntry = next_entries[0]
+    if os.path.exists(next_csvFile):
+        next_entries = []
+        readCsvData(Mode, next_csvFile, FieldNames, next_entries, dt, maps)
+        nextEntry = next_entries[0]
     elif os.path.exists(next_jsonFile):
-        # print("reading next json file=" + next_jsonFile)
         with open(next_jsonFile, 'r', encoding='utf-8') as jsonf:
             next_json = json.load(jsonf)
             # print("next_json=" + json.dumps(next_json, indent=4))
             nextEntry = next_json['entries'][0]
-    else:   
+    else:
         entries_last = len(entries) - 1
         nextEntry = entries[entries_last]
     totalsMap(Mode, totals, maps, entries, nextEntry)
@@ -263,8 +229,8 @@ def make_json(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str):
         jsonf.write(json.dumps(data, indent=4))
 
 
+# iterator over all csv files
 def run_conv(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str):
-
     with os.scandir(csvFilePath) as it:
         for entry in it:
             if entry.name.endswith(".csv") and entry.is_file():
@@ -273,12 +239,10 @@ def run_conv(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str):
                 # print("csv-file: " + csvFile + ", jsonFile: " + jsonFile)
                 if not os.path.exists(jsonFile):
                     print("convert: csv-file: " + entry.name + ", jsonFile: " + os.path.basename(jsonFile))
-                    # Call the make_json function
                     make_json(Mode, csvFile, jsonFile, mapFile)
 
 
 def main(argv: dict):
-
     opts, args = getopt.getopt(argv, "hM:m:c:j:", ["Mode=", "mapfile=", "csvfile=", "jsonfile="])
     for opt, arg in opts:
         if opt == '-h':
