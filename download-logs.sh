@@ -1,4 +1,7 @@
 #!/bin/bash
+
+# download all logging files from owb1.9
+# replace openwb in url if owb1.9 raspi has a different name 
 url=http://openwb/openWB/web/logging/data/
 logs_folder=$HOME/conv-logs/data19
 fromMonth=202010
