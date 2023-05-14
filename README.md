@@ -13,7 +13,8 @@ The field names for 1.9 (daily, monthly) can be found in the source conv.py.
 The fields in 2.0 can be found in MQTT e.g. via MQTT-Explorer.
 The topics to search for are e.g. "openWB/system/device/<device-no>/component/<component-no>".
 
-The mapping happens by the fieldmap-daily.csv rsp fieldmap-monthlöy.csv files.
+The mapping happens by the fieldmap-daily.csv rsp fieldmap-monthly.csv and fieldmap_chargelog.csv files.
+For chargelog there is another mapping file chargemap.csv for discrete values from values in 1.9 to 2.0. 
 These may need adjustment to the devices existing in 1.9 rsp. 2.0.
 Each mapping (row) in these files corresponds to a target field in 2.0.
 column 1.3 give the address in the 2.0 data structure.
@@ -21,9 +22,10 @@ column 4 defines the source in 1.9 or a constant value.
 column 5 defines the type of conversion to be applied.
 conversion types supported are int, float, const.
 
-daily.sh runs the mogration for all daily files,
-monthly.sh for all monthly files.
-clean.sh is an example and will need adjustments, it removes the migrated json files.
-download_logs.sh copies all log files from openwb 1.9.
+- daily.sh runs the migration for all daily files,
+- monthly.sh for all monthly files.
+- chargelog.sh for all chargelog files.
+- clean.sh is an example and will need adjustments, it removes the migrated json files.
+- download_logs.sh copies all log files from openwb 1.9.
 _
 
