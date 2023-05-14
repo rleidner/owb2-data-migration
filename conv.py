@@ -82,6 +82,17 @@ FieldNamesMonthly = ['TimeStamp',            # 0
                      'SmartHomeDevice9',     # 27
                      'SmartHomeDevice10']    # 28
 
+FieldNamesChargelog = ['Startzeit',          # 1
+                       'Endzeit',            # 2
+                       'geladene_km',        # 3
+                       'geladene_kWh',       # 4
+                       'Ladeleistung_kW',    # 5
+                       'Ladedauer',          # 6
+                       'Ladepunkt_Nummer',   # 7
+                       'Lademodus',          # 8
+                       'RFID_Tag',           # 9
+                       'Kosten']             # 10
+
 
 def readCsv(csvFile: str, csvs: list):
     csvf = open(csvFile, encoding='utf-8')
@@ -111,7 +122,7 @@ def entryMap(obj: dict, maps: list, row: dict):
             obj[map['devicetype']] = {}
         if map['device'] not in obj[map['devicetype']]:
             obj[map['devicetype']][map['device']] = {}
-        if map['conversion'] == 'int' and 'sum' not in map['source']:
+        if map['conversion'] == 'int':
             try:
                 obj[map['devicetype']][map['device']][map['direction']] = int(float(row[map['source']]))
             except Exception:
@@ -132,11 +143,11 @@ def totalsMap(Mode: str, obj: dict, maps: list, entries: list, nextEntry: dict):
             obj[map['devicetype']] = {}
         if map['device'] not in obj[map['devicetype']]:
             obj[map['devicetype']][map['device']] = {}
-        if map['conversion'] == 'int' and 'sum' not in map['source']:
+        if map['conversion'] == 'int':
             obj[map['devicetype']][map['device']][map['direction']] = int(
                 float(nextEntry[map['devicetype']][map['device']][map['direction']]) -
                 float(entries[0][map['devicetype']][map['device']][map['direction']]))
-        if map['conversion'] == 'float' and 'sum' not in map['source']:
+        if map['conversion'] == 'float':
             obj[map['devicetype']][map['device']][map['direction']]\
              = float(nextEntry[map['devicetype']][map['device']][map['direction']])\
              - float(entries[0][map['devicetype']][map['device']][map['direction']])
@@ -144,9 +155,9 @@ def totalsMap(Mode: str, obj: dict, maps: list, entries: list, nextEntry: dict):
             obj[map['devicetype']][map['device']][map['direction']] = int(map['source'])
 
 
-# read and process 1.9 csv data file into json structure
+# read and process 1.9 csv data file into json structure, daily and monthly
 def readCsvData(Mode: str, csvFile: str, FieldNames: list, entries: list, dt: str, maps: list):
-    print("reading csv file: " + csvFile)
+    # print("reading csv file: " + csvFile)
     with open(csvFile, 'r', encoding='utf-8') as csvf:
         csvReader = csv.DictReader(csvf, fieldnames=FieldNames)
         for rows in csvReader:
@@ -229,8 +240,113 @@ def make_json(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str):
         jsonf.write(json.dumps(data, indent=4))
 
 
+# mapping chargelog structure
+def entryMapChargelog(obj: dict, maps: list, chargemaps: list, row: dict):
+    for map in maps:
+        if map['section'] not in obj:
+            obj[map['section']] = {}
+        if map['item'] not in obj[map['section']]:
+            obj[map['section']][map['item']] = None
+        if 'map' in map['conversion']:
+            try:
+                key = map['key']
+                o1 = row[map['source']]
+                # print("conversion(map): key=" + str(key) + ", o1=" + str(o1))
+                # print("chargemaps=" + str(chargemaps))
+                cm = list(filter(lambda cmap: cmap['key'] == key and cmap['owb1Value'] == o1, chargemaps))[0]
+                # print("cm=" + str(cm))
+                o2 = cm['owb2Value']
+                # print("conversion(map): key=" + str(key) + ", o1=" + str(o1) + ", o2=" + str(o2))
+                if 'str' in map['conversion']:
+                    obj[map['section']][map['item']] = o2
+                elif 'float' in map['conversion']:
+                    obj[map['section']][map['item']] = float(o2)
+                elif 'int' in map['conversion']:
+                    obj[map['section']][map['item']] = int(float(o2))
+            except Exception as e:
+                print("exception(map): " + str(e))
+                obj[map['section']][map['item']] = 'mapFAILED'
+        if map['conversion'] == 'bool':
+            try:
+                if map['source'] == "true":
+                    obj[map['section']][map['item']] = True
+                if map['source'] == "false":
+                    obj[map['section']][map['item']] = False
+            except Exception as e:
+                print("exception(map): " + str(e))
+        if map['conversion'] == 'timestamp':
+            try:
+                ts = row[map['source']]
+                ts_time = datetime.datetime.strptime(ts, '%d.%m.%y-%H:%M')
+                obj[map['section']][map['item']] = datetime.datetime.strftime(ts_time, '%m/%d/%Y, %H:%M:00')
+            except Exception as e:
+                print("exception(timestamp): " + str(e))
+                obj[map['section']][map['item']] = '01/01/1970, 00:00:00'
+        if map['conversion'] == 'interval':
+            try:
+                delta = row[map['source']].replace(' ', '').replace('H',':').replace('Min','')
+                if ':' not in delta:
+                    delta = '00:' + delta
+                obj[map['section']][map['item']] = delta
+            except Exception as e:
+                print("exception(interval): " + str(e))
+                obj[map['section']][map['item']] = '00:00'
+        if map['conversion'] == 'int':
+            try:
+                obj[map['section']][map['item']] = int(float(row[map['source']]))
+            except Exception:
+                obj[map['section']][map['item']] = int(0)
+        if map['conversion'] == 'Mint':
+            try:
+                obj[map['section']][map['item']] = int(float(row[map['source']]) * 1000)
+            except Exception:
+                obj[map['section']][map['item']] = int(0)
+        if map['conversion'] == 'float':
+            try:
+                obj[map['section']][map['item']] = float(row[map['source']])
+            except Exception:
+                obj[map['section']][map['item']] = float(0)
+        if map['conversion'] == 'const':
+            obj[map['section']][map['item']] = int(map['source'])
+
+
+# read and process 1.9 csv data file into json structure, chargelog
+def readCsvChargelog(csvFile: str, FieldNames: list, entries: list, dt: str, maps: list, chargemaps: list):
+    # print("reading csv file: " + csvFile)
+    with open(csvFile, 'r', encoding='utf-8') as csvf:
+        csvReader = csv.DictReader(csvf, fieldnames=FieldNames)
+        for rows in csvReader:
+            entry = {}
+
+            # print("ts=" + ts + ", epoch=" + ts_epoch + ", t1=" + t1)
+            entryMapChargelog(entry, maps, chargemaps, rows)
+            entries.append(entry)
+
+
+# Function to convert a CSV to JSON
+# Takes the file paths as arguments
+def make_json_chargelog(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str, chargemapFile: str):
+    # print("make_json_chargelog tbd")
+    FieldNames = FieldNamesChargelog
+    dt = os.path.basename(csvFilePath)[0:-4]
+    # create dictionaries
+    entries = []
+
+    maps = []
+    readCsv(mapFile, maps)
+    chargemaps = []
+    readCsv(chargemapFile, chargemaps)
+
+    readCsvChargelog(csvFilePath, FieldNames, entries, dt, maps, chargemaps)
+
+    # Open a json writer, and use the json.dumps()
+    # function to dump data
+    with open(jsonFilePath, 'w', encoding='utf-8') as jsonf:
+        jsonf.write(json.dumps(entries, indent=4))
+
+
 # iterator over all csv files
-def run_conv(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str):
+def run_conv(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str, chargemapFile: str):
     with os.scandir(csvFilePath) as it:
         for entry in it:
             if entry.name.endswith(".csv") and entry.is_file():
@@ -239,17 +355,23 @@ def run_conv(Mode: str, csvFilePath: str, jsonFilePath: str, mapFile: str):
                 # print("csv-file: " + csvFile + ", jsonFile: " + jsonFile)
                 if not os.path.exists(jsonFile):
                     print("convert: csv-file: " + entry.name + ", jsonFile: " + os.path.basename(jsonFile))
-                    make_json(Mode, csvFile, jsonFile, mapFile)
+                    if Mode == "D" or Mode == "M":
+                        make_json(Mode, csvFile, jsonFile, mapFile)
+                    elif Mode == "L":
+                        make_json_chargelog(Mode, csvFile, jsonFile, mapFile, chargemapFile)
 
 
 def main(argv: dict):
-    opts, args = getopt.getopt(argv, "hM:m:c:j:", ["Mode=", "mapfile=", "csvfile=", "jsonfile="])
+    chargemapFile = ''
+    opts, args = getopt.getopt(argv, "hM:m:c:j:C:", ["Mode=", "mapfile=", "csvfile=", "jsonfile=", "chargemap="])
     for opt, arg in opts:
         if opt == '-h':
-            print('conv-daily.py -M [D,M] -m <mapfile> -c <csvfile> -j <jsonfile>')
+            print('conv-daily.py -M [D,M,L] -m <mapfile> -c <csvfile> -j <jsonfile>')
             sys.exit()
         elif opt in ("-M", "--Mode"):
             Mode = arg
+        elif opt in ("-C", "--chargemap"):
+            chargemapFile = arg
         elif opt in ("-m", "--mapfile"):
             mapFile = arg
         elif opt in ("-c", "--csvfile"):
@@ -257,14 +379,18 @@ def main(argv: dict):
         elif opt in ("-j", "--jsonfile"):
             jsonFilePath = arg
 
-    if Mode == 'D' or Mode == 'M':
-        # print ('Mode is ', Mode)
-        # print ('Map file is ', mapFile)
-        # print ('csv file path is ', csvFilePath)
-        # print ('json file path is ', jsonFilePath)
-        run_conv(Mode, csvFilePath, jsonFilePath, mapFile)
+    if Mode == 'D' or Mode == 'M' or Mode == 'L':
+        print ('Mode is ' + Mode)
+        print ('Map file is ' + mapFile)
+        if Mode == 'L':
+            print ('Chargemap file is ' + chargemapFile)
+        print ('csv file path is ' + csvFilePath)
+        print ('json file path is ' + jsonFilePath)
+        if not chargemapFile:
+            chargemapFile = ""
+        run_conv(Mode, csvFilePath, jsonFilePath, mapFile, chargemapFile)
     else:
-        print("Mode not in (D,M) - Abort")
+        print("Mode not in (D,M,L) - Abort")
 
 
 if __name__ == "__main__":

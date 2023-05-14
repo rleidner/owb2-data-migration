@@ -1,0 +1,14 @@
+key,owb1Value,owb2Value
+CPId,1,3
+CPName,1,MQTT-CP3-ID3
+CPId,2,4
+CPName,2,MQTT-CP4-smart
+VehicleId,1,2
+VehicleName,1,ID3
+VehicleId,2,3
+VehicleName,2,smart
+Lademodus,0,instant_charging
+Lademodus,1,pv_charging+PV
+Lademodus,2,pv_charging
+Lademodus,3,stop
+Lademodus,4,standby

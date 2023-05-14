@@ -1,0 +1,16 @@
+section,item,source,conversion,key
+chargepoint,id,Ladepunkt_Nummer,map/int,CPId
+chargepoint,name,Ladepunkt_Nummer,map/str,CPName
+vehicle,id,Ladepunkt_Nummer,map/int,VehicleId
+vehicle,name,Ladepunkt_Nummer,map/str,VehicleName
+vehicle,chargemode,Lademodus,map/str,Lademodus
+vehicle,prio,false,bool
+vehicle,rfid,RFID_Tag,string
+time,begin,Startzeit,timestamp
+time,end,Endzeit,timestamp
+time,time_charged,Ladedauer,interval
+data,range_charged,geladene_km,int
+data,imported_since_mode_switch,geladene_kWh,Mint
+data,imported_since_plugged,geladene_kWh,Mint
+data,power,Ladeleistung_kW,float
+data,costs,Kosten,float
